@@ -124,12 +124,11 @@
         <div class="menuPanel">
           <h2>THE HOOK</h2>
           <p>
-            You begin with a single ember spell. Survive rooms, recover rune-words, then socket
-            one element and up to two modifiers to invent new magic. The codex remembers every
-            rune and combination you discover.
+            You begin with a single ember spell. Fuse two elements to create ground effects,
+            zones, and bursts — not bullet upgrades. The codex remembers every fusion you discover.
           </p>
           <div style="margin-top:10px">
-            <span class="pill">Fire first</span><span class="pill">Forge between rooms</span>
+            <span class="pill">Fire + Earth = Magma</span><span class="pill">Forge between rooms</span>
             <span class="pill">Optional tutorial</span>
           </div>
           <div id="firstRunHint" class="firstHint">New wrights should try the tutorial first.</div>
@@ -183,7 +182,7 @@
     <div class="card">
       <div class="ftitle">
         <h1 style="font-size:26px;letter-spacing:4px;margin:0">THE FORGE</h1>
-        <div class="hint">Click a socket, then a rune below · <kbd>Tab</kbd> to close</div>
+        <div class="hint">Click a socket, then an element below · Fuse I + II · <kbd>Tab</kbd> to close</div>
       </div>
       <div class="slots" id="slotsWrap"></div>
       <div class="inv">
@@ -219,32 +218,86 @@ const SETTINGS_KEY='runewright_settings_v1', TUTORIAL_KEY='runewright_tutorial_d
 let settings={volume:0.75, shake:0.75, reducedFlashes:false};
 try{ settings=Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')); }catch(e){}
 function saveSettings(){ try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }catch(e){} }
-const SPR_IMG=new Image(); SPR_IMG.src='assets/sprites/runewright_sprites.png';
-const SPR={
-  player:[0,0], fireRune:[1,0], splitRune:[2,0], boltRune:[3,0],
-  drifter:[0,1], spitter:[1,1], brute:[2,1], boss:[3,1],
-  fire:[0,2], frost:[1,2], bolt:[2,2], arcane:[3,2]
-};
-function spriteReady(){ return SPR_IMG.complete && SPR_IMG.naturalWidth>0; }
+/* ---------- Original pixel sprites ---------- */
+const PAL={o:'#1a1030',r:'#5a3fa0',p:'#e8e2ff',e:'#ff7a3c',s:'#c9a4ff',t:'#b87d4a',f:'#5cc8ff',v:'#7dff8a',i:'#c1553f',u:'#7d5cc0',b:'#8a3a2a'};
+function drawShadow(x,y,r){ X.save(); X.globalAlpha=0.32; X.fillStyle='#000'; X.beginPath(); X.ellipse(x,y+r*0.2,r,r*0.35,0,0,TAU); X.fill(); X.restore(); }
+function drawWright(x,y,opts={}){
+  const aim=opts.aim||0, walk=opts.walk||0, cast=opts.cast||0, dash=opts.dash||0, t=opts.t||0;
+  const flip=Math.cos(aim)<0?-1:1, fr=Math.floor(t*9)%4, bob=Math.sin(t*3)*2, leg=walk>25?(fr%2)*2:0;
+  drawShadow(x,y,12);
+  X.save(); X.translate(x,y+bob); if(dash){X.globalAlpha=0.6; X.translate(9*flip,0);} X.scale(flip,1);
+  const z=2.6;
+  X.fillStyle=PAL.o; X.fillRect(-4*z,-6*z,8*z,4*z);
+  X.fillStyle=PAL.p; X.fillRect(-2*z,-5*z,4*z,2*z);
+  X.fillStyle=PAL.r; X.fillRect(-5*z,-2*z,10*z,9*z);
+  X.fillStyle=PAL.o; X.fillRect(-4*z+leg,7*z,3*z,3*z); X.fillRect(1*z-leg,7*z,3*z,3*z);
+  X.fillStyle=PAL.s; X.fillRect(5*z,-4*z,1.2*z,12*z);
+  X.fillStyle=PAL.e; X.globalAlpha=cast>0?1:0.55+Math.sin(t*8)*0.25;
+  X.beginPath(); X.arc(5.5*z,-5*z,2.4*z,0,TAU); X.fill(); X.globalAlpha=1;
+  X.restore();
+}
+function drawMobPixel(m){
+  const t=m.animT||0, fr=Math.floor(t*7)%2, hop=Math.sin(t*8)*2*(m.type==='drifter'?2:1);
+  const x=m.x, y=m.y+hop; drawShadow(x,y,m.r*0.7);
+  X.save(); X.translate(x,y);
+  if(m.flash>0 && !settings.reducedFlashes) X.globalAlpha=0.5;
+  const z=m.boss?3.4:m.type==='brute'?3:m.type==='dummy'?2.6:2.4;
+  if(m.boss){
+    X.fillStyle=PAL.b; X.fillRect(-8*z,-8*z,16*z,14*z);
+    X.fillStyle=PAL.e; X.fillRect(-3*z,-10*z,6*z,4*z);
+    X.fillStyle=PAL.o; for(let i=0;i<6;i++){const a=(i/6)*TAU; X.fillRect(Math.cos(a)*7*z-2*z,Math.sin(a)*7*z-2*z,4*z,4*z);}
+  } else if(m.type==='brute'){
+    X.fillStyle=PAL.b; X.fillRect(-7*z,-5*z,14*z,12*z);
+    X.fillStyle=PAL.o; X.fillRect(-8*z+(fr*2),4*z,5*z,4*z); X.fillRect(3*z-(fr*2),4*z,5*z,4*z);
+  } else if(m.type==='spitter'||m.type==='dummy'){
+    X.fillStyle=m.type==='dummy'?PAL.s:PAL.u; X.beginPath(); X.moveTo(0,-6*z); X.lineTo(6*z,5*z); X.lineTo(-6*z,5*z); X.closePath(); X.fill();
+    X.fillStyle=PAL.p; X.fillRect(-2*z,-2*z,4*z,3*z);
+  } else {
+    X.fillStyle=PAL.i; X.fillRect(-5*z,-4*z+(fr*1),10*z,9*z);
+    X.fillStyle=PAL.e; X.fillRect(-2*z,-3*z,2*z,2*z); X.fillRect(2*z,-3*z,2*z,2*z);
+    X.fillStyle=PAL.o; X.fillRect(-1*z,5*z,2*z,3*z);
+  }
+  X.restore();
+}
+function drawEffectGlyph(kind,x,y,r,color,t){
+  X.save(); X.translate(x,y);
+  if(kind==='patch'||kind==='zone'){
+    X.globalAlpha=0.35+Math.sin(t*4)*0.1; X.fillStyle=color;
+    X.beginPath(); X.arc(0,0,r,0,TAU); X.fill();
+    X.strokeStyle=color; X.globalAlpha=0.7; X.lineWidth=2; X.stroke();
+  } else if(kind==='orb'){
+    X.fillStyle=color; X.beginPath(); X.arc(0,0,r,0,TAU); X.fill();
+    glowCircle(0,0,r*1.4,color,0.4);
+  }
+  X.restore();
+}
 
 /* ---------- Rune definitions ---------- */
-// Base = element core of a projectile. Mods twist behaviour.
+// Elements fuse in pairs to create spell effects — not bullet modifiers.
 const BASES = {
-  fire:  {key:'fire',  name:'Ignis',  el:'Fire',   g:'🔥', color:'#ff5a2c', dmg:6,  cd:0.48, speed:460, size:7,  desc:'Burns targets over time.'},
-  frost: {key:'frost', name:'Glaci',  el:'Frost',  g:'❄️', color:'#5cc8ff', dmg:7,  cd:0.30, speed:560, size:7,  desc:'Chills, slowing what it hits.'},
-  bolt:  {key:'bolt',  name:'Fulmen', el:'Bolt',   g:'⚡', color:'#ffe14d', dmg:6,  cd:0.16, speed:900, size:5,  desc:'Fast, low-cooldown lightning.'},
-  venom: {key:'venom', name:'Toxis',  el:'Venom',  g:'☠️', color:'#7dff8a', dmg:5,  cd:0.28, speed:540, size:7,  desc:'Stacking poison that ramps.'},
-  arcane:{key:'arcane',name:'Aether', el:'Arcane', g:'✦',  color:'#c99bff', dmg:14, cd:0.46, speed:600, size:9,  desc:'Raw force. Heavy hits.'},
+  fire:  {key:'fire',  name:'Ignis',  el:'Fire',   g:'🔥', color:'#ff5a2c', desc:'Ember. Burns over time.'},
+  earth: {key:'earth', name:'Terra',  el:'Earth',  g:'🪨', color:'#b87d4a', desc:'Weight. Ground and shock.'},
+  frost: {key:'frost', name:'Glaci',  el:'Frost',  g:'❄️', color:'#5cc8ff', desc:'Chill. Slows foes.'},
+  bolt:  {key:'bolt',  name:'Fulmen', el:'Bolt',   g:'⚡', color:'#ffe14d', desc:'Arc. Chains and stuns.'},
+  venom: {key:'venom', name:'Toxis',  el:'Venom',  g:'☠️', color:'#7dff8a', desc:'Toxin. Ramping poison.'},
+  arcane:{key:'arcane',name:'Aether', el:'Arcane', g:'✦',  color:'#c99bff', desc:'Raw force. Heavy burst.'},
 };
 const MODS = {
-  chain: {key:'chain', name:'Salta',  g:'⛓️', tag:'CHAIN',  desc:'Arcs to a nearby foe on hit.'},
-  split: {key:'split', name:'Findo',  g:'⋔',  tag:'SPLIT',  desc:'Fires a 3-shot spread.'},
-  pierce:{key:'pierce',name:'Perfor', g:'➹',  tag:'PIERCE', desc:'Passes through enemies.'},
-  delay: {key:'delay', name:'Mora',   g:'⧗',  tag:'DELAY',  desc:'Halts, then detonates in an AoE.'},
-  homing:{key:'homing',name:'Sequor', g:'◎',  tag:'HOMING', desc:'Curves toward the nearest foe.'},
-  nova:  {key:'nova',  name:'Pulsa',  g:'✺',  tag:'NOVA',   desc:'Bursts shards on impact.'},
-  amp:   {key:'amp',   name:'Magnus', g:'⬢',  tag:'AMPLIFY',desc:'+90% damage & size, a touch slower.'},
-  haste: {key:'haste', name:'Celer',  g:'»',  tag:'HASTE',  desc:'−35% cooldown, +40% speed.'},
+  amp:   {key:'amp',   name:'Magnus', g:'⬢',  tag:'AMPLIFY',desc:'+50% effect size & duration.'},
+  delay: {key:'delay', name:'Mora',   g:'⧗',  tag:'DELAY',  desc:'Effect lingers before erupting.'},
+  haste: {key:'haste', name:'Celer',  g:'»',  tag:'HASTE',  desc:'−25% cooldown.'},
+};
+const FUSIONS={
+  'fire':      {name:'Ember',     kind:'ember', color:'#ff5a2c', dmg:5, cd:0.9,  speed:240, size:6,  life:0.9, desc:'A single slow ember bolt.'},
+  'earth':     {name:'Pebble',    kind:'lob',   color:'#b87d4a', dmg:6, cd:1.0,  speed:190, size:9,  life:1.4, patch:38, patchLife:2.5, desc:'Lobs earth; leaves a brief rumble zone.'},
+  'frost':     {name:'Shard',     kind:'ember', color:'#5cc8ff', dmg:4, cd:0.95, speed:220, size:6,  life:1.0, slow:1.2, desc:'Icy shard that chills.'},
+  'bolt':      {name:'Spark',     kind:'ember', color:'#ffe14d', dmg:4, cd:0.85, speed:280, size:5,  life:0.8, desc:'Quick spark.'},
+  'earth|fire':{name:'Magma',     kind:'patch', color:'#ff6a2c', dmg:4, cd:1.35, radius:54, life:4.2, tick:0.45, burn:1.6, slow:0.4, desc:'Ground patch — burns and slows.'},
+  'fire|frost':{name:'Steam',     kind:'patch', color:'#9ad4ff', dmg:3, cd:1.25, radius:62, life:3.8, tick:0.5, slow:1.4, desc:'Mist field that heavily chills.'},
+  'earth|frost':{name:'Quake',    kind:'nova',  color:'#b87d4a', dmg:11,cd:1.5,  radius:72, knock:90, slow:0.8, desc:'Shock ring at the cursor.'},
+  'bolt|fire': {name:'Kindle',    kind:'orb',   color:'#ffb14d', dmg:5, cd:1.15, speed:120, size:10, life:2.2, homing:1, burn:1.4, desc:'Drifting ember orb that seeks foes.'},
+  'bolt|earth':{name:'Spike',     kind:'lob',   color:'#d4a574', dmg:9, cd:1.4,  speed:170, size:11, life:1.6, nova:50, desc:'Heavy spike that bursts on impact.'},
+  'bolt|frost':{name:'Static',    kind:'patch', color:'#8ad4ff', dmg:3, cd:1.3,  radius:48, life:3.2, tick:0.55, zap:8, desc:'Crackling field — random zaps.'},
 };
 const ALL_MOD_KEYS = Object.keys(MODS);
 const ALL_BASE_KEYS = Object.keys(BASES);
@@ -259,23 +312,29 @@ function discoverRune(k){ if(!codex.runes[k]){ codex.runes[k]=1; saveCodex(); } 
 function discoverCombo(sig,label){ if(sig && !codex.combos[sig]){ codex.combos[sig]=label; saveCodex(); toast('✦ New rune-word: '+label); } }
 
 /* ---------- Game state ---------- */
-let G, keys={}, mouse={x:W/2,y:H/2,down:false,rdown:false}, paused=false, forgeOpen=false;
+let G, keys={}, mouse={x:W/2,y:H/2,down:false,rdown:false,click0:false,click1:false}, paused=false, forgeOpen=false;
+
+function normSpell(sp){
+  if(!sp) return {el1:null,el2:null,mod:null};
+  if(sp.el1!==undefined) return {el1:sp.el1||null, el2:sp.el2||null, mod:sp.mod||null};
+  return {el1:sp.base||null, el2:sp.el2||null, mod:(sp.mods&&sp.mods[0])||null};
+}
+function fusionKey(a,b){ return a&&b?[a,b].sort().join('|'):a; }
 
 function newGame(){
   G = {
     mode:'run', t:0, floor:1, roomsCleared:0, kills:0,
-    player:{x:W/2,y:H/2,r:13,hp:80,maxhp:80,speed:220,vx:0,vy:0,
+    player:{x:W/2,y:H/2,r:13,hp:80,maxhp:80,speed:175,vx:0,vy:0,
             dashcd:0, iframe:0, castAnim:0, dashAnim:0, spells:[null,null], cds:[0,0]},
-    bullets:[], mobs:[], parts:[], drops:[], floaters:[],
+    bullets:[], zones:[], mobs:[], parts:[], drops:[], floaters:[],
     inv:{bases:[], mods:[]},
-    rewardQueue:['split','bolt','frost','pierce','haste'],
+    rewardQueue:['earth','frost','bolt','amp','delay'],
     room:null, map:null, shake:0, over:false, won:false, tutorial:null,
   };
-  // starting kit
   G.inv.bases=['fire']; G.inv.mods=[];
   discoverRune('fire');
-  G.player.spells[0]={base:'fire', mods:[]};
-  G.player.spells[1]={base:null, mods:[]};
+  G.player.spells[0]={el1:'fire',el2:null,mod:null};
+  G.player.spells[1]={el1:null,el2:null,mod:null};
   buildFloor();
   enterRoom(G.map.start);
   recomputeSpells();
@@ -284,21 +343,21 @@ function newGame(){
 function newTutorial(){
   G = {
     mode:'tutorial', t:0, floor:0, roomsCleared:0, kills:0,
-    player:{x:W/2,y:H/2+120,r:13,hp:80,maxhp:80,speed:220,vx:0,vy:0,
+    player:{x:W/2,y:H/2+120,r:13,hp:80,maxhp:80,speed:175,vx:0,vy:0,
             dashcd:0, iframe:0, castAnim:0, dashAnim:0, spells:[null,null], cds:[0,0]},
-    bullets:[], mobs:[], parts:[], drops:[], floaters:[],
+    bullets:[], zones:[], mobs:[], parts:[], drops:[], floaters:[],
     inv:{bases:['fire'], mods:[]}, rewardQueue:[],
     room:null, map:null, shake:0, over:false, won:false,
     tutorial:{
       phase:0, move:0, aimed:false, cast:0, dashed:false, picked:false,
-      forged:false, combo:false, spitterDone:false, done:false,
+      fused:false, patchCast:false, spitterDone:false, done:false,
       markers:[{x:W/2,y:H/2,type:'zone',r:70}],
       boltSpawned:false,
     },
   };
   discoverRune('fire');
-  G.player.spells[0]={base:'fire', mods:[]};
-  G.player.spells[1]={base:null, mods:[]};
+  G.player.spells[0]={el1:'fire',el2:null,mod:null};
+  G.player.spells[1]={el1:null,el2:null,mod:null};
   G.map={GS:1,start:'0,0',key:(x,y)=>x+','+y,grid:{'0,0':{x:0,y:0,type:'tutorial',cleared:false,doors:{},visited:false}}};
   enterRoom(G.map.start);
   G.mobs=[makeMob('dummy',W/2,H/2-70)];
@@ -356,7 +415,7 @@ function enterRoom(room){
   const p=G.player;
   // place player at appropriate side
   p.x=W/2; p.y=H/2;
-  G.bullets=[]; G.drops=[];
+  G.bullets=[]; G.drops=[]; G.zones=[];
   G.mobs=[];
   if(!room.cleared){
     if(room.type==='boss') spawnBoss();
@@ -370,12 +429,12 @@ function enterRoom(room){
 /* ---------- Enemies ---------- */
 function spawnWave(room){
   const f=G.floor;
-  const n = f===1 ? 2+Math.floor(Math.random()*2) : 3 + Math.floor(f*0.8) + Math.floor(Math.random()*3);
+  const n = f===1 ? 2 : 2 + Math.floor(f*0.6) + Math.floor(Math.random()*2);
   for(let i=0;i<n;i++){
     const roll=Math.random();
     let type = f===1
-      ? (roll<0.25?'drifter': roll<0.7?'spitter':'brute')
-      : (roll<0.35?'drifter': roll<0.7?'spitter':'brute');
+      ? (roll<0.35?'drifter': roll<0.75?'spitter':'brute')
+      : (roll<0.3?'drifter': roll<0.65?'spitter':'brute');
     const edge=pick(['t','b','l','r']);
     let x,y;
     if(edge==='t'){x=rand(80,W-80);y=70;} else if(edge==='b'){x=rand(80,W-80);y=H-70;}
@@ -403,66 +462,117 @@ function spawnBoss(){
 
 /* ---------- Spell compilation ---------- */
 function comboLabel(spell){
-  if(!spell||!spell.base) return '—';
-  const b=BASES[spell.base];
-  let s=b.name;
-  spell.mods.forEach(m=>{ if(MODS[m]) s+=' · '+MODS[m].name; });
-  return s;
+  const s=normSpell(spell);
+  if(!s.el1) return '—';
+  const fk=s.el2?fusionKey(s.el1,s.el2):s.el1;
+  const f=FUSIONS[fk];
+  let name=f?f.name:BASES[s.el1].name+(s.el2?' + '+BASES[s.el2].name:'');
+  if(s.mod&&MODS[s.mod]) name+=' · '+MODS[s.mod].name;
+  return name;
 }
 function comboSig(spell){
-  if(!spell||!spell.base) return '';
-  return spell.base+'|'+[...spell.mods].sort().join('+');
+  const s=normSpell(spell);
+  if(!s.el1) return '';
+  return fusionKey(s.el1,s.el2||'')+(s.mod?'|'+s.mod:'');
 }
 function playerPowerScale(){
   if(!G||G.mode==='tutorial') return 0.85;
   return clamp(0.72 + G.roomsCleared*0.04 + (G.floor-1)*0.07, 0.72, 1.15);
 }
+function compileSpell(s,pow){
+  if(!s.el1) return null;
+  const fk=s.el2?fusionKey(s.el1,s.el2):s.el1;
+  const base=FUSIONS[fk]||FUSIONS[s.el1];
+  if(!base) return null;
+  let c={...base, dmg:base.dmg*pow, el:s.el1, els:[s.el1,s.el2].filter(Boolean), mod:s.mod};
+  if(s.mod==='amp'){ c.dmg*=1.5; if(c.radius)c.radius*=1.4; }
+  if(s.mod==='haste') c.cd*=0.75;
+  if(s.mod==='delay' && c.kind==='patch'){ c.life=(c.life||3)*1.35; c.dmg*=1.2; }
+  c.cd=Math.max(0.55,c.cd||1);
+  return c;
+}
 function recomputeSpells(){
   const pow=playerPowerScale();
   G.player.spells.forEach((sp,i)=>{
-    if(!sp||!sp.base){ G.player._compiled=G.player._compiled||[]; G.player._compiled[i]=null; return; }
-    const b=BASES[sp.base]; const mods=sp.mods.filter(m=>MODS[m]);
-    let c={base:sp.base,color:b.color,dmg:b.dmg*pow,cd:b.cd,speed:b.speed,size:b.size,
-      el:b.key, count:1, spread:0, pierce:0, chain:0, homing:0, delay:0, nova:0, life:1.1};
-    mods.forEach(m=>{
-      if(m==='split'){ c.count=3; c.spread=0.34; c.dmg*=0.8; }
-      if(m==='pierce'){ c.pierce=3; c.speed*=1.1; }
-      if(m==='chain'){ c.chain=3; }
-      if(m==='homing'){ c.homing=1; c.speed*=0.9; }
-      if(m==='delay'){ c.delay=0.55; c.speed*=0.72; }
-      if(m==='nova'){ c.nova=6; }
-      if(m==='amp'){ c.dmg*=1.9; c.size*=1.6; c.speed*=0.85; c.cd*=1.15; }
-      if(m==='haste'){ c.cd*=0.65; c.speed*=1.4; c.dmg*=0.85; }
-    });
-    c.cd=Math.max(0.08,c.cd);
+    const s=normSpell(sp); G.player.spells[i]={el1:s.el1,el2:s.el2,mod:s.mod};
+    const c=compileSpell(s,pow);
     G.player._compiled=G.player._compiled||[]; G.player._compiled[i]=c;
-    discoverCombo(comboSig(sp), comboLabel(sp));
+    if(c) discoverCombo(comboSig(sp), comboLabel(sp));
   });
 }
 
 /* ---------- Casting ---------- */
+function castTarget(){
+  const p=G.player;
+  const d=Math.min(220, Math.hypot(mouse.x-p.x, mouse.y-p.y));
+  const a=Math.atan2(mouse.y-p.y,mouse.x-p.x);
+  return {x:clamp(p.x+Math.cos(a)*d,40,W-40), y:clamp(p.y+Math.sin(a)*d,40,H-40), ang:a};
+}
+function spawnZone(c,tx,ty){
+  G.zones=G.zones||[];
+  G.zones.push({x:tx,y:ty,r:c.radius||48,life:c.life||3.5,tick:c.tick||0.45,tickT:0,
+    dmg:c.dmg,color:c.color,el:c.el,burn:c.burn||0,slow:c.slow||0,zap:c.zap||0,kind:c.kind});
+  ringParts(tx,ty,c.color,14,(c.radius||48)*0.4);
+}
 function cast(slot){
   const p=G.player, c=p._compiled&&p._compiled[slot];
   if(!c||p.cds[slot]>0) return;
   p.cds[slot]=c.cd;
-  const ang=Math.atan2(mouse.y-p.y, mouse.x-p.x);
-  const n=c.count, spread=c.spread;
-  for(let i=0;i<n;i++){
-    const a=ang + (n>1 ? (i-(n-1)/2)*spread : 0);
+  const tgt=castTarget(), ang=tgt.ang;
+  const k=c.kind||'ember';
+  if(k==='patch'){
+    spawnZone(c,tgt.x,tgt.y);
+    G.shake=Math.min(G.shake+4,10);
+  } else if(k==='nova'){
+    ringParts(tgt.x,tgt.y,c.color,22,(c.radius||70)*0.5);
+    G.mobs.forEach(m=>{
+      if(dist(tgt.x,tgt.y,m.x,m.y)<(c.radius||70)+m.r){
+        damageMob(m,c.dmg,c.el,tgt.x,tgt.y);
+        if(c.slow) m.slow=Math.max(m.slow,c.slow);
+        if(!m.boss && c.knock){ const ka=Math.atan2(m.y-tgt.y,m.x-tgt.x); m.vx+=Math.cos(ka)*c.knock; m.vy+=Math.sin(ka)*c.knock; }
+      }
+    });
+    G.shake=Math.min(G.shake+6,12);
+  } else {
     G.bullets.push({
-      x:p.x+Math.cos(a)*16, y:p.y+Math.sin(a)*16,
-      vx:Math.cos(a)*c.speed, vy:Math.sin(a)*c.speed,
+      x:p.x+Math.cos(ang)*16, y:p.y+Math.sin(ang)*16,
+      vx:Math.cos(ang)*c.speed, vy:Math.sin(ang)*c.speed,
       r:c.size, dmg:c.dmg, color:c.color, el:c.el,
-      pierce:c.pierce, chain:c.chain, homing:c.homing,
-      delay:c.delay, delayT:c.delay, nova:c.nova, life:c.life,
+      homing:c.homing||0, life:c.life||1.1, kind:k,
+      patch:c.patch||0, patchLife:c.patchLife||0, nova:c.nova||0, slow:c.slow||0, burn:c.burn||0,
       hitset:new Set(),
     });
+    for(let i=0;i<4;i++) G.parts.push(mkPart(p.x+Math.cos(ang)*16,p.y+Math.sin(ang)*16,c.color,rand(1,2.5),ang));
+    G.shake=Math.min(G.shake+2,8);
   }
-  // muzzle
-  for(let i=0;i<5;i++) G.parts.push(mkPart(p.x+Math.cos(ang)*16,p.y+Math.sin(ang)*16,c.color,rand(1,3),ang));
-  G.shake=Math.min(G.shake+ (c.size>10?3:1.2), 10);
-  p.castAnim=0.18;
-  if(G.mode==='tutorial' && G.tutorial){ G.tutorial.cast=(G.tutorial.cast||0)+1; if(c.count>1)G.tutorial.combo=true; }
+  p.castAnim=0.22;
+  if(G.mode==='tutorial' && G.tutorial){
+    G.tutorial.cast=(G.tutorial.cast||0)+1;
+    if(c.kind==='patch' && c.els&&c.els.includes('earth')&&c.els.includes('fire')) G.tutorial.patchCast=true;
+  }
+}
+function stepZones(dt){
+  if(!G.zones) return;
+  for(let i=G.zones.length-1;i>=0;i--){
+    const z=G.zones[i]; z.life-=dt; z.tickT-=dt;
+    if(z.tickT<=0){
+      z.tickT=z.tick;
+      G.mobs.forEach(m=>{
+        if(m.hp<=0) return;
+        if(dist(z.x,z.y,m.x,m.y)<z.r+m.r){
+          damageMob(m,z.dmg,z.el,z.x,z.y);
+          if(z.burn) m.burn=Math.max(m.burn,z.burn);
+          if(z.slow) m.slow=Math.max(m.slow,z.slow);
+        }
+      });
+      if(z.zap && Math.random()<0.45){
+        const m=nearestMob(z.x,z.y);
+        if(m && dist(z.x,z.y,m.x,m.y)<z.r+80) damageMob(m,z.zap,'bolt',z.x,z.y);
+      }
+    }
+    if(Math.random()<0.35) G.parts.push(mkPart(z.x+rand(-z.r,z.r),z.y+rand(-z.r,z.r),z.color,rand(1,2.5),0,0.35));
+    if(z.life<=0) G.zones.splice(i,1);
+  }
 }
 
 /* ---------- Bullet logic ---------- */
@@ -484,8 +594,9 @@ function nearestMob(x,y,exclude){
 }
 
 function applyElement(m,el){
-  if(el==='fire') m.burn=Math.max(m.burn,1.8);
-  else if(el==='frost') m.slow=Math.max(m.slow,1.1);
+  if(el==='fire') m.burn=Math.max(m.burn,1.6);
+  else if(el==='frost') m.slow=Math.max(m.slow,1.0);
+  else if(el==='earth') m.slow=Math.max(m.slow,0.5);
   else if(el==='venom') m.poison=Math.min(6,(m.poison||0)+1.4);
 }
 function damageMob(m,dmg,el,fx,fy){
@@ -509,45 +620,40 @@ function killMob(m){
 }
 
 function stepBullets(dt){
-  const P=G.player;
   for(let i=G.bullets.length-1;i>=0;i--){
     const b=G.bullets[i];
-    // delay: travel, then stop & detonate
-    if(b.delay>0){
-      b.delayT-=dt;
-      if(b.delayT<=0){ detonate(b); G.bullets.splice(i,1); continue; }
-    }
     if(b.homing){
       const tgt=nearestMob(b.x,b.y);
       if(tgt){ const a=Math.atan2(tgt.y-b.y,tgt.x-b.x); const cur=Math.atan2(b.vy,b.vx);
-        let da=((a-cur+Math.PI*3)%TAU)-Math.PI; const turn=clamp(da,-6*dt,6*dt);
+        let da=((a-cur+Math.PI*3)%TAU)-Math.PI; const turn=clamp(da,-4*dt,4*dt);
         const sp=Math.hypot(b.vx,b.vy); const na=cur+turn; b.vx=Math.cos(na)*sp; b.vy=Math.sin(na)*sp; }
     }
     b.x+=b.vx*dt; b.y+=b.vy*dt; b.life-=dt;
-    // trail
-    if(Math.random()<0.6) G.parts.push(mkPart(b.x,b.y,b.color,rand(1,2.4),0,0.3));
-    // walls
-    if(b.x<12||b.x>W-12||b.y<12||b.y>H-12||b.life<=0){
-      if(b.nova) detonate(b);
-      G.bullets.splice(i,1); continue;
-    }
-    // collision
+    if(Math.random()<0.4) G.parts.push(mkPart(b.x,b.y,b.color,rand(1,2),0,0.25));
+    const hitWall=b.x<12||b.x>W-12||b.y<12||b.y>H-12||b.life<=0;
     let removed=false;
-    for(const m of G.mobs){
-      if(m.hp<=0||b.hitset.has(m)) continue;
-      if(dist(b.x,b.y,m.x,m.y) < b.r+m.r){
-        damageMob(m,b.dmg,b.el,b.x,b.y);
-        b.hitset.add(m);
-        if(b.nova) detonate(b);
-        if(b.chain>0){
-          const nxt=nearestMob(b.x,b.y,m);
-          if(nxt){ b.chain--; const a=Math.atan2(nxt.y-b.y,nxt.x-b.x); const sp=Math.hypot(b.vx,b.vy);
-            b.vx=Math.cos(a)*sp; b.vy=Math.sin(a)*sp; b.hitset=new Set([m]); }
-          else if(b.pierce<=0){ removed=true; }
-        } else if(b.pierce>0){ b.pierce--; }
-        else { removed=true; }
-        if(removed){ G.bullets.splice(i,1); break; }
+    if(!hitWall){
+      for(const m of G.mobs){
+        if(m.hp<=0||b.hitset.has(m)) continue;
+        if(dist(b.x,b.y,m.x,m.y) < b.r+m.r){
+          damageMob(m,b.dmg,b.el,b.x,b.y);
+          if(b.slow) m.slow=Math.max(m.slow,b.slow);
+          if(b.burn) m.burn=Math.max(m.burn,b.burn);
+          b.hitset.add(m);
+          if(b.kind!=='lob' && b.kind!=='orb') removed=true;
+          if(b.nova){ ringParts(b.x,b.y,b.color,14,b.nova*0.4); G.mobs.forEach(mm=>{
+            if(dist(b.x,b.y,mm.x,mm.y)<b.nova+mm.r) damageMob(mm,b.dmg*0.85,b.el,b.x,b.y);
+          }); removed=true; }
+          if(removed){ G.bullets.splice(i,1); break; }
+        }
       }
+    }
+    if(!removed && hitWall){
+      if(b.patch) spawnZone({radius:b.patch,life:b.patchLife||2,dmg:b.dmg*0.7,tick:0.5,color:b.color,el:b.el,burn:b.burn,slow:b.slow,kind:'patch'},b.x,b.y);
+      if(b.nova){ ringParts(b.x,b.y,b.color,12,b.nova*0.35); G.mobs.forEach(m=>{
+        if(dist(b.x,b.y,m.x,m.y)<b.nova+m.r) damageMob(m,b.dmg*0.8,b.el,b.x,b.y);
+      }); }
+      G.bullets.splice(i,1);
     }
   }
 }
@@ -577,7 +683,7 @@ function stepMobs(dt){
         m.windup=0.22; m.shotCycle=(m.shotCycle||0)+1;
         if(m.shotCycle%3===0) enemyBurst(m,a,3,0.3,{speed:245,dmg:m.dmg*0.85});
         else enemyShot(m,a,{speed:255});
-        m.fire= m.shotCycle%3===0 ? 1.35 : 0.95;
+        m.fire= (m.shotCycle%3===0 ? 1.6 : 1.15) * (G.floor===1?1.4:1);
       }
     } else if(m.heavy){
       m.fire-=dt;
@@ -601,7 +707,7 @@ function stepMobs(dt){
       m.vx=lerp(m.vx,Math.cos(a)*spd,0.08); m.vy=lerp(m.vy,Math.sin(a)*spd,0.08);
       m.fire-=dt;
       if(d>70 && d<260 && m.fire<=0){
-        m.windup=0.18; m.fire=2.3;
+        m.windup=0.18; m.fire=2.8*(G.floor===1?1.35:1);
         enemyBurst(m,a,2,0.35,{speed:210,dmg:m.dmg*0.55,r:5,color:'#ff7a4a',life:2.6});
       }
     }
@@ -621,7 +727,7 @@ function stepMobs(dt){
     if(G.room.type==='boss'){ winRun(); return; }
     if(G.mode==='tutorial'){
       const t=G.tutorial;
-      if(t && t.phase<5){ dropRune(W/2,H/2-30,false,'split'); showTutorialStep(5); return; }
+      if(t && t.phase<5){ dropRune(W/2,H/2-30,false,'earth'); showTutorialStep(5); return; }
       if(t && t.phase===8){ finishTutorial(); return; }
       return;
     }
@@ -667,8 +773,8 @@ function stepPlayer(dt){
   if(p.castAnim>0)p.castAnim-=dt;
   if(p.dashAnim>0)p.dashAnim-=dt;
   for(let i=0;i<2;i++) p.cds[i]=Math.max(0,p.cds[i]-dt);
-  if(mouse.down) cast(0);
-  if(mouse.rdown) cast(1);
+  if(mouse.click0){ cast(0); mouse.click0=false; }
+  if(mouse.click1){ cast(1); mouse.click1=false; }
   // door transition when room cleared
   if(G.room.cleared){
     checkDoors();
@@ -741,34 +847,6 @@ function stepParts(dt){
   for(let i=G.floaters.length-1;i>=0;i--){const f=G.floaters[i];f.y+=f.vy*dt;f.vy*=0.9;f.life-=dt;if(f.life<=0)G.floaters.splice(i,1);}
 }
 
-function drawSpriteFrame(name,col,row,x,y,w,h,rot,alpha,scale){
-  if(!spriteReady()) return false;
-  const cw=SPR_IMG.naturalWidth/4, ch=SPR_IMG.naturalHeight/3;
-  const s=SPR[name]; const fc=col??(s?s[0]:0), fr=row??(s?s[1]:0);
-  X.save(); X.translate(x,y); if(rot)X.rotate(rot); if(alpha!==undefined)X.globalAlpha=alpha;
-  if(scale&&scale!==1) X.scale(scale,scale);
-  X.drawImage(SPR_IMG,fc*cw,fr*ch,cw,ch,-w/2,-h/2,w,h);
-  X.restore(); return true;
-}
-function drawSpriteShadow(x,y,r,a){
-  X.save(); X.globalAlpha=a||0.35; X.fillStyle='#000';
-  X.beginPath(); X.ellipse(x,y+r*0.15,r*0.9,r*0.35,0,0,TAU); X.fill(); X.restore();
-}
-function drawAnimatedSprite(name,x,y,w,h,opts={}){
-  const bob=opts.bob||0, lean=opts.lean||0, scale=opts.scale||1, windup=opts.windup||0;
-  const pulse=1+Math.sin((opts.animT||0)*5)*0.03;
-  const atk=1+windup*0.18;
-  const sy=y+bob+Math.sin((opts.animT||0)*4)*2;
-  const rot=lean+(opts.face||0);
-  drawSpriteShadow(x,y,w*0.22);
-  return drawSpriteFrame(name,opts.col,opts.row,x,sy,w,h,rot,opts.alpha,scale*pulse*atk);
-}
-function drawSprite(name,x,y,w,h,rot,alpha){
-  return drawAnimatedSprite(name,x,y,w,h,{lean:rot||0,alpha});
-}
-function runeSpriteKey(kind,key){ if(kind==='base'&&(key==='fire'||key==='bolt'))return key+'Rune'; if(kind==='mod'&&key==='split')return 'splitRune'; return null; }
-function projectileSpriteKey(el){ return SPR[el]?el:null; }
-
 function drawTutorialMarkers(){
   if(!G||G.mode!=='tutorial'||!G.tutorial||!G.tutorial.markers) return;
   G.tutorial.markers.forEach(mk=>{
@@ -806,16 +884,16 @@ function draw(){
   // tutorial markers
   drawTutorialMarkers();
 
+  // zones (ground spell effects)
+  if(G.zones) G.zones.forEach(z=> drawEffectGlyph('patch',z.x,z.y,z.r,z.color,G.t));
+
   // drops
   G.drops.forEach(d=>{
     const rd = d.kind==='base'?BASES[d.key]:MODS[d.key];
     const yo=Math.sin(d.t*3)*4;
-    glowCircle(d.x,d.y+yo,d.r, d.kind==='base'?rd.color:'#c9a4ff', 0.5);
-    const rs=runeSpriteKey(d.kind,d.key);
-    if(!drawAnimatedSprite(rs,d.x,d.y+yo,42,42,{lean:Math.sin(d.t*2)*0.15,animT:d.t,bob:Math.sin(d.t*3)*2})){
-      X.font='18px serif'; X.textAlign='center'; X.textBaseline='middle';
-      X.fillStyle='#fff'; X.fillText(rd.g, d.x, d.y+yo+1);
-    }
+    glowCircle(d.x,d.y+yo,d.r, d.kind==='base'?rd.color:'#c9a4ff', 0.45);
+    X.font='20px serif'; X.textAlign='center'; X.textBaseline='middle';
+    X.fillStyle='#fff'; X.fillText(rd.g, d.x, d.y+yo+1);
     X.textAlign='center'; X.textBaseline='alphabetic';
     X.font='9px sans-serif'; X.fillStyle='#c9a4ff';
     X.fillText(rd.name, d.x, d.y+yo+22);
@@ -829,36 +907,10 @@ function draw(){
   });
 
   // mobs
+  G.mobs.forEach(m=> drawMobPixel(m));
   G.mobs.forEach(m=>{
-    // aura for status
-    if(m.slow>0) glowCircle(m.x,m.y,m.r+5,'#5cc8ff',0.25);
-    const col = m.flash>0? '#ffffff' : m.color;
-    const sw=m.boss?94:m.type==='brute'?60:m.type==='dummy'?50:46, sh=m.boss?94:m.type==='brute'?60:50;
-    const spr=m.boss?'boss':m.type==='dummy'?'spitter':m.type;
-    const bob=Math.sin((m.animT||0)*6)*2+(m.vx*m.vx+m.vy*m.vy>100?Math.sin(G.t*14)*1.5:0);
-    const face=Math.atan2(m.vy,m.vx)*0.15;
-    if(!drawAnimatedSprite(spr,m.x,m.y,sw,sh,{bob,lean:face,animT:m.animT,windup:m.windup||0,
-      alpha:m.flash>0&&!settings.reducedFlashes?0.45:1})){
-      X.save(); X.translate(m.x,m.y);
-      X.fillStyle=col; X.strokeStyle='#00000060'; X.lineWidth=2;
-      if(m.boss){
-        // warden — jagged
-        X.beginPath();
-        for(let i=0;i<10;i++){const a=(i/10)*TAU;const rr=m.r*(i%2?0.72:1);X.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}
-        X.closePath(); X.fill(); X.stroke();
-        X.fillStyle='#ffd36a'; X.beginPath();X.arc(-12,-6,5,0,TAU);X.arc(12,-6,5,0,TAU);X.fill();
-      } else if(m.type==='spitter'||m.type==='dummy'){
-        X.beginPath();X.moveTo(0,-m.r);X.lineTo(m.r,m.r);X.lineTo(-m.r,m.r);X.closePath();X.fill();X.stroke();
-      } else if(m.type==='brute'){
-        X.fillRect(-m.r,-m.r,m.r*2,m.r*2); X.strokeRect(-m.r,-m.r,m.r*2,m.r*2);
-      } else {
-        X.beginPath();X.arc(0,0,m.r,0,TAU);X.fill();X.stroke();
-      }
-      X.restore();
-    }
-    // burn tint
-    if(m.burn>0) glowCircle(m.x,m.y,m.r+2,'#ff7a3c',0.2);
-    // hp bar
+    if(m.slow>0) glowCircle(m.x,m.y,m.r+5,'#5cc8ff',0.2);
+    if(m.burn>0) glowCircle(m.x,m.y,m.r+2,'#ff7a3c',0.18);
     if(m.hp<m.maxhp){
       const bw=m.r*2, hpf=m.hp/m.maxhp;
       X.fillStyle='#000a'; X.fillRect(m.x-bw/2,m.y-m.r-9,bw,4);
@@ -868,15 +920,7 @@ function draw(){
 
   // bullets
   G.bullets.forEach(b=>{
-    if(b.delay>0 && b.delayT< b.delay*0.5){ // arming flash
-      glowCircle(b.x,b.y,b.r+ Math.sin(G.t*30)*2+3, b.color, 0.9);
-    } else {
-      const ps=projectileSpriteKey(b.el), a=Math.atan2(b.vy,b.vx);
-      const spin=a+G.t*8;
-      if(ps) glowCircle(b.x,b.y,b.r,b.color,0.35);
-      if(!ps||!drawAnimatedSprite(ps,b.x,b.y,b.r*4.6,b.r*4.6,{lean:spin,animT:G.t,scale:1+Math.sin(G.t*20)*0.08}))
-        glowCircle(b.x,b.y,b.r,b.color,0.95);
-    }
+    drawEffectGlyph(b.kind==='lob'?'orb':'orb', b.x,b.y,b.r,b.color,G.t);
   });
 
   // particles
@@ -886,19 +930,10 @@ function draw(){
 
   // player
   const p=G.player;
-  if(!settings.reducedFlashes && p.iframe>0 && Math.floor(G.t*30)%2) X.globalAlpha=0.4;
-  glowCircle(p.x,p.y,p.r+3,'#a06bff',0.4);
-  const moveSpd=Math.hypot(p.vx,p.vy);
+  if(!settings.reducedFlashes && p.iframe>0 && Math.floor(G.t*30)%2) X.globalAlpha=0.45;
   const aim=Math.atan2(mouse.y-p.y,mouse.x-p.x);
-  const castKick=p.castAnim>0?-p.castAnim*0.35:0;
-  const dashStretch=p.dashAnim>0?1.12:1;
-  const playerBob=moveSpd>20?Math.sin(G.t*12)*2.5:Math.sin(G.t*3)*1.2;
-  if(!drawAnimatedSprite('player',p.x,p.y-6,48,56,{
-    bob:playerBob, lean:aim*0.08+castKick, animT:G.t, scale:dashStretch,
-  })){
-    X.fillStyle='#e8e2ff'; X.strokeStyle='#a06bff'; X.lineWidth=2.5;
-    X.beginPath();X.arc(p.x,p.y,p.r,0,TAU);X.fill();X.stroke();
-  }
+  drawWright(p.x,p.y,{aim, walk:Math.hypot(p.vx,p.vy), cast:p.castAnim, dash:p.dashAnim, t:G.t});
+  X.globalAlpha=1;
   // aim
   const aa=Math.atan2(mouse.y-p.y,mouse.x-p.x);
   X.strokeStyle='#a06bff88'; X.lineWidth=2; X.beginPath();
@@ -948,12 +983,13 @@ function drawSpellBar(){
     rr(x,by,206,44,8); X.fill(); X.stroke();
     X.fillStyle='#8a83b8'; X.font='10px sans-serif'; X.textAlign='left';
     X.fillText(lbl, x+10, by+14);
-    if(sp&&sp.base){
-      const b=BASES[sp.base];
-      X.font='18px serif'; X.fillText(b.g, x+10, by+34);
-      let mg=sp.mods.map(m=>MODS[m]?MODS[m].g:'').join(' ');
+    if(sp&&sp.el1){
+      const s=normSpell(sp);
+      const fk=s.el2?fusionKey(s.el1,s.el2):s.el1;
+      const f=FUSIONS[fk]||FUSIONS[s.el1];
+      X.font='18px serif'; X.fillText((BASES[s.el1]||{}).g||'', x+10, by+34);
       X.fillStyle='#e8e2ff'; X.font='bold 12px sans-serif'; X.fillText(comboLabel(sp), x+34, by+22);
-      X.fillStyle='#8a83b8'; X.font='13px serif'; X.fillText(mg, x+34, by+37);
+      X.fillStyle='#8a83b8'; X.font='11px sans-serif'; X.fillText(f?f.kind:'', x+34, by+37);
       // cooldown
       const cd=p.cds[i], mx=p._compiled&&p._compiled[i]?p._compiled[i].cd:1;
       if(cd>0){ X.fillStyle='#00000088'; const f=cd/mx; X.fillRect(x,by+44-44*f,206,44*f); }
@@ -979,11 +1015,11 @@ function toast(msg){ const el=document.getElementById('toast'); el.textContent=m
 function stepToast(dt){ if(toastT>0){ toastT-=dt; if(toastT<=0) document.getElementById('toast').classList.remove('show'); } }
 
 /* ---------- Forge UI ---------- */
-let forgeSel={slot:0, sock:'base'};
+let forgeSel={slot:0, sock:'el1'};
 function openForge(){
   if(!G||G.over) return;
   if(G.mode==='run' && G.room && !G.room.cleared){ toast('Clear the room before forging'); return; }
-  if(G.mode==='tutorial' && G.tutorial && !G.tutorial.picked){ toast('Collect the modifier rune first'); return; }
+  if(G.mode==='tutorial' && G.tutorial && !G.tutorial.picked){ toast('Collect the Terra rune first'); return; }
   forgeOpen=true; paused=true;
   document.getElementById('forge').classList.add('show');
   renderForge();
@@ -993,26 +1029,23 @@ function closeForge(){
   document.getElementById('forge').classList.remove('show');
   recomputeSpells();
   if(G.mode==='tutorial' && G.tutorial){
-    const sp=G.player.spells[0]; if(sp&&sp.mods.includes('split')) G.tutorial.forged=true;
+    const sp=normSpell(G.player.spells[0]);
+    if(sp.el1==='fire'&&sp.el2==='earth') G.tutorial.fused=true;
   }
 }
 function renderForge(){
   const wrap=document.getElementById('slotsWrap'); wrap.innerHTML='';
   G.player.spells.forEach((sp,si)=>{
-    sp = sp||{base:null,mods:[]}; G.player.spells[si]=sp;
+    const s=normSpell(sp); G.player.spells[si]={el1:s.el1,el2:s.el2,mod:s.mod};
     const div=document.createElement('div'); div.className='slot';
     let sockets = `<div class="sockets">`;
-    // base socket
-    sockets += socketHTML(si,'base', sp.base?BASES[sp.base].g:'', sp.base?BASES[sp.base].name:'element');
-    // two mod sockets
-    for(let mi=0;mi<2;mi++){
-      const mk=sp.mods[mi];
-      sockets += socketHTML(si,'mod'+mi, mk?MODS[mk].g:'', mk?MODS[mk].name:'mod');
-    }
+    sockets += socketHTML(si,'el1', s.el1?BASES[s.el1].g:'', s.el1?BASES[s.el1].name:'I');
+    sockets += socketHTML(si,'el2', s.el2?BASES[s.el2].g:'', s.el2?BASES[s.el2].name:'II');
+    sockets += socketHTML(si,'mod', s.mod?MODS[s.mod].g:'', s.mod?MODS[s.mod].name:'mod');
     sockets+='</div>';
-    div.innerHTML = `<h3>SPELL ${si===0?'◧ LMB':'◨ RMB'} <span style="color:#8affa0">${comboLabel(sp)}</span></h3>`
+    div.innerHTML = `<h3>SPELL ${si===0?'◧ LMB':'◨ RMB'} <span style="color:#8affa0">${comboLabel(G.player.spells[si])}</span></h3>`
       + sockets
-      + `<div class="spelldesc">${spellDesc(sp)}</div>`;
+      + `<div class="spelldesc">${spellDesc(G.player.spells[si])}</div>`;
     wrap.appendChild(div);
   });
   // wire socket clicks
@@ -1033,7 +1066,7 @@ function renderForge(){
 }
 function socketHTML(slot,sock,g,label){
   const filled=g?'1':'0';
-  const cls='sock '+(sock==='base'?'base ':'')+(g?'filled':'');
+  const cls='sock '+(sock==='el1'?'base ':'')+(g?'filled':'');
   return `<div class="${cls}" data-slot="${slot}" data-sock="${sock}" data-filled="${filled}">${g}<small>${label}</small></div>`;
 }
 function runeChip(k,kind,invIdx){
@@ -1046,44 +1079,52 @@ function runeChip(k,kind,invIdx){
 }
 function socketRune(k,kind){
   const sp=G.player.spells[forgeSel.slot]; if(!sp) return;
-  if(forgeSel.sock==='base'){
-    if(kind!=='base'){ toast('That socket takes an element rune'); return; }
-    sp.base=k;
+  const s=normSpell(sp);
+  if(forgeSel.sock==='el1'){
+    if(kind!=='base'){ toast('First socket takes a primary element'); return; }
+    s.el1=k;
+  } else if(forgeSel.sock==='el2'){
+    if(kind!=='base'){ toast('Second socket takes a fusion element'); return; }
+    s.el2=k;
   } else {
-    if(kind!=='mod'){ toast('That socket takes a modifier rune'); return; }
-    const mi = forgeSel.sock==='mod0'?0:1;
-    sp.mods[mi]=k;
+    if(kind!=='mod'){ toast('Modifier socket'); return; }
+    s.mod=k;
   }
+  G.player.spells[forgeSel.slot]={el1:s.el1,el2:s.el2,mod:s.mod};
   recomputeSpells();
-  if(G.mode==='tutorial' && G.tutorial && k==='split') G.tutorial.forged=true;
+  if(G.mode==='tutorial' && G.tutorial && s.el1==='fire'&&s.el2==='earth') G.tutorial.fused=true;
   renderForge();
 }
 function clearSocket(slot,sock){
-  const sp=G.player.spells[slot];
-  if(sock==='base') return; // base always required
-  const mi=sock==='mod0'?0:1; sp.mods[mi]=undefined; sp.mods=sp.mods.filter(x=>x!==undefined);
+  const s=normSpell(G.player.spells[slot]);
+  if(sock==='el1') return;
+  if(sock==='el2') s.el2=null;
+  if(sock==='mod') s.mod=null;
+  G.player.spells[slot]={el1:s.el1,el2:s.el2,mod:s.mod};
   recomputeSpells();
 }
 function spellDesc(sp){
-  if(!sp||!sp.base) return 'Socket an element rune to begin.';
-  const c=(G.player._compiled&&G.player._compiled[G.player.spells.indexOf(sp)]);
-  const b=BASES[sp.base];
-  let parts=[`<span class="nm">${b.el}</span> — ${b.desc}`];
-  sp.mods.filter(m=>MODS[m]).forEach(m=>parts.push(`<span class="nm">${MODS[m].tag}</span> — ${MODS[m].desc}`));
-  let stat = c? ` <span style="color:#8a83b8">(${Math.round(c.dmg)} dmg · ${c.cd.toFixed(2)}s cd${c.count>1?' · x'+c.count:''})</span>`:'';
+  const s=normSpell(sp);
+  if(!s.el1) return 'Socket a primary element to begin.';
+  const c=compileSpell(s, playerPowerScale());
+  const fk=s.el2?fusionKey(s.el1,s.el2):s.el1;
+  const f=FUSIONS[fk]||FUSIONS[s.el1];
+  let parts=[`<span class="nm">${f?f.name:BASES[s.el1].name}</span> — ${f?f.desc:BASES[s.el1].desc}`];
+  if(s.mod&&MODS[s.mod]) parts.push(`<span class="nm">${MODS[s.mod].tag}</span> — ${MODS[s.mod].desc}`);
+  let stat = c? ` <span style="color:#8a83b8">(${Math.round(c.dmg)} dmg · ${c.cd.toFixed(1)}s · ${c.kind})</span>`:'';
   return parts.join('<br/>')+stat;
 }
 
 /* ---------- Tutorial ---------- */
 const TUTORIAL_PHASES=[
-  {title:'Step 1/8 — Move', text:'Walk into the glowing circle at the center of the chamber.', keys:'<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>', prog:12.5},
-  {title:'Step 2/8 — Aim', text:'Move your cursor onto the practice shade. Your staff follows the mouse.', keys:'Mouse', prog:25},
-  {title:'Step 3/8 — Cast Ignis', text:'Left-click to cast ember bolts. Fire three times — burn stacks over time.', keys:'<kbd>L-Click</kbd>', prog:37.5},
-  {title:'Step 4/8 — Dash', text:'A slow bolt is incoming. Press Space to blink through it with brief invulnerability.', keys:'<kbd>Space</kbd>', prog:50},
-  {title:'Step 5/8 — Break the shade', text:'Keep casting until the practice shade shatters.', keys:'<kbd>L-Click</kbd>', prog:62.5},
-  {title:'Step 6/8 — Collect Findo', text:'Pick up the Split modifier rune, then press Tab to open the Forge.', keys:'<kbd>Tab</kbd>', prog:75},
-  {title:'Step 7/8 — Socket & combine', text:'Select the modifier socket on Ignis, then choose Findo to create a three-shot spread.', keys:'<kbd>Tab</kbd> · Forge', prog:87.5},
-  {title:'Step 8/8 — Dodge & fight', text:'A spitter appears. Strafe its bolts and defeat it to finish training.', keys:'<kbd>Space</kbd> · <kbd>L-Click</kbd>', prog:100},
+  {title:'Step 1/8 — Move', text:'Walk into the glowing circle. Runewright is slow and deliberate — positioning matters.', keys:'<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>', prog:12.5},
+  {title:'Step 2/8 — Aim', text:'Point your cursor at the practice shade. Spells land where you aim.', keys:'Mouse', prog:25},
+  {title:'Step 3/8 — Cast Ember', text:'Click to cast a single ember bolt. Each cast has weight — not a bullet hose.', keys:'<kbd>L-Click</kbd>', prog:37.5},
+  {title:'Step 4/8 — Dash', text:'A slow bolt approaches. Press Space to blink through it.', keys:'<kbd>Space</kbd>', prog:50},
+  {title:'Step 5/8 — Break the shade', text:'Keep casting embers until the shade breaks.', keys:'<kbd>L-Click</kbd>', prog:62.5},
+  {title:'Step 6/8 — Collect Terra', text:'Pick up the Earth rune. Elements fuse — Fire + Earth becomes Magma.', keys:'Walk over rune', prog:75},
+  {title:'Step 7/8 — Fuse at the Forge', text:'Press Tab. Socket Terra into the second slot beside Ignis to create Magma.', keys:'<kbd>Tab</kbd>', prog:87.5},
+  {title:'Step 8/8 — Cast Magma', text:'Click to place a burning ground patch. Then defeat the spitter from range.', keys:'<kbd>L-Click</kbd> · <kbd>Space</kbd>', prog:100},
 ];
 function showTutorialStep(phase){
   if(!G||!G.tutorial) return;
@@ -1120,14 +1161,14 @@ function stepTutorial(){
   if(t.phase===3 && t.dashed){ showTutorialStep(4); }
   if(t.phase===4 && G.room.cleared){ showTutorialStep(5); }
   if(t.phase===5 && t.picked){ showTutorialStep(6); }
-  if(t.phase===6 && t.forged){ showTutorialStep(7); }
-  if(t.phase===7 && t.combo){ showTutorialStep(8); }
+  if(t.phase===6 && t.fused){ showTutorialStep(7); }
+  if(t.phase===7 && t.patchCast){ showTutorialStep(8); }
 }
 function finishTutorial(){
   const t=G.tutorial; if(!t||t.done) return;
   t.done=true; try{ localStorage.setItem(TUTORIAL_KEY,'1'); }catch(e){}
   document.getElementById('tutorialTitle').textContent='Training complete';
-  document.getElementById('tutorialText').textContent='You learned movement, casting, dashing, forging, and fighting ranged foes. Descending into the crypt...';
+  document.getElementById('tutorialText').textContent='You learned fusion: elements combine into effects, not bullet upgrades. Entering the crypt...';
   document.getElementById('tutorialKeys').innerHTML='';
   document.getElementById('tutorialProgress').style.width='100%';
   setTimeout(()=>{ if(G&&G.mode==='tutorial'&&G.tutorial&&G.tutorial.done) begin(); },2200);
@@ -1139,7 +1180,7 @@ function loop(ts){
   const dt=Math.min(0.033,(ts-last)/1000||0); last=ts;
   if(G && !paused && !G.over){
     G.t+=dt;
-    stepPlayer(dt); stepBullets(dt); stepMobs(dt); stepEnemyBullets(dt);
+    stepPlayer(dt); stepBullets(dt); stepZones(dt); stepMobs(dt); stepEnemyBullets(dt);
     stepDrops(dt); stepParts(dt); stepToast(dt);
     // floor descent handled on boss kill
   }
@@ -1190,7 +1231,7 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
 CV.addEventListener('mousemove',e=>{ const r=CV.getBoundingClientRect();
   mouse.x=(e.clientX-r.left)*(W/r.width); mouse.y=(e.clientY-r.top)*(H/r.height); });
-CV.addEventListener('mousedown',e=>{ if(e.button===0)mouse.down=true; if(e.button===2)mouse.rdown=true; });
+CV.addEventListener('mousedown',e=>{ if(e.button===0){mouse.down=true;mouse.click0=true;} if(e.button===2){mouse.rdown=true;mouse.click1=true;} });
 addEventListener('mouseup',e=>{ if(e.button===0)mouse.down=false; if(e.button===2)mouse.rdown=false; });
 CV.addEventListener('contextmenu',e=>e.preventDefault());
 
